@@ -25,11 +25,11 @@ flutter run
 ```sh
 flutter analyze
 flutter test
-flutter build apk --debug
+flutter build apk --release --split-per-abi
 flutter build web --release --base-href /flutter/ --no-web-resources-cdn
 ```
 
-GitHub Actions همین مراحل را در پروژه موقت اجرا می‌کند و APK آزمایشی و خروجی Flutter Web را به‌عنوان artifact تحویل می‌دهد. برای نصب نسخه عمومی فروشگاه، امضای انتشار، آیکون نهایی و آزمون روی دستگاه‌های هدف لازم است. نسخه فعلی نمونه بازی است؛ خرید درون‌برنامه‌ای، حساب آنلاین و همگام‌سازی ابری ندارد.
+GitHub Actions همین مراحل را در پروژه موقت اجرا می‌کند و سه APK آزمایشی جدا برای arm64-v8a، armeabi-v7a و x86_64 و خروجی Flutter Web را به‌عنوان artifact تحویل می‌دهد. برای نصب نسخه عمومی فروشگاه، امضای انتشار، آیکون نهایی و آزمون روی دستگاه‌های هدف لازم است. نسخه فعلی نمونه بازی است؛ خرید درون‌برنامه‌ای، حساب آنلاین و همگام‌سازی ابری ندارد.
 
 ## ساختار
 
