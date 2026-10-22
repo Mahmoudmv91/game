@@ -78,7 +78,15 @@ class _GardenScreenState extends State<GardenScreen> {
   }
   Widget _panel(Widget child)=>Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xfffffefa),borderRadius:BorderRadius.circular(24),border:Border.all(color:const Color(0xffe1e7d8))),child:child);
   Widget _puzzle()=>_panel(Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('مرحله ${fa(game.level)}',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold,color:ink)),const Text('✦ جورچین باغ',style:TextStyle(color:Colors.grey))]),
+    Row(children: [
+      Expanded(child: Text('مرحله ${fa(game.level)}',
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: ink))),
+      const SizedBox(width: 12),
+      const Flexible(child: Text('✦ جورچین باغ', maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: Colors.grey))),
+    ]),
     const SizedBox(height:18),Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xfff1f4e9),borderRadius:BorderRadius.circular(16)),child:Row(children:[
       Column(children:[Text(fa(game.moves),style:const TextStyle(fontSize:30,color:ink)),const Text('حرکت باقی‌مانده',style:TextStyle(fontSize:10))]),const SizedBox(width:25),
       Expanded(child:Wrap(spacing:16,runSpacing:8,children:[...game.goals.entries.map((g)=>Text('${symbols[g.key]} ${fa(max(0,g.value-game.collected[g.key]))}',style:const TextStyle(fontSize:21))),if(game.soilTotal>0)Text('🌱 ${fa(max(0,game.soilTotal-game.soilCleared))}',style:const TextStyle(fontSize:21))])),
