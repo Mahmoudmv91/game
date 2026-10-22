@@ -1,166 +1,117 @@
-import 'dart:convert';
-import 'dart:math';
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'garden_controller.dart';
 import 'game_engine.dart';
+import 'persian_board.dart';
 
-void main() { WidgetsFlutterBinding.ensureInitialized(); runApp(const DreamGarden()); }
-const ink = Color(0xff365d42), cream = Color(0xfff7f7ef);
-const symbols = ['🍎', '💧', '🍃', '⭐', '🌸'];
-const decorations = [['🪴','🌻','🌷'],['🪑','🛋️','🪵'],['⛲','🪷','🏺'],['🌸','🌺','🌼'],['🏮','💡','✨']];
-const titles = ['اولین سلام به باغ','جایی برای نفس‌کشیدن','صدای آرام آب','رنگ‌های تازه','شب‌های روشن باغ'];
-const costs = [1,1,2,2,3];
-String fa(int n) => '$n'.split('').map((c)=>'۰۱۲۳۴۵۶۷۸۹'[int.parse(c)]).join();
-
+const teal=Color(0xff195964),ink=Color(0xff234b50),gold=Color(0xffdfb566),cream=Color(0xfffff7e6);
+String fa(Object value)=>value.toString().replaceAllMapped(RegExp('[0-9]'),(m)=>'۰۱۲۳۴۵۶۷۸۹'[int.parse(m[0]!)]);
+void main(){WidgetsFlutterBinding.ensureInitialized();runApp(const DreamGarden());}
 class DreamGarden extends StatelessWidget {
   const DreamGarden({super.key});
-  @override Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner:false, title:'باغ رویا',
-    theme:ThemeData(useMaterial3:true, scaffoldBackgroundColor:cream,
-      colorScheme:ColorScheme.fromSeed(seedColor:ink),fontFamily:'Tahoma'),
-    home:const Directionality(textDirection:TextDirection.rtl,child:GardenScreen()),
-  );
+  @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'باغ فیروزه | قصه ترنج',theme:ThemeData(useMaterial3:true,fontFamily:'GardenPersian',colorScheme:ColorScheme.fromSeed(seedColor:teal,primary:teal,surface:cream),scaffoldBackgroundColor:const Color(0xffeee6d3),textTheme:const TextTheme(bodyMedium:TextStyle(color:ink,height:1.7)),filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(padding:const EdgeInsets.symmetric(horizontal:18,vertical:14),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))))),home:const Directionality(textDirection:TextDirection.rtl,child:GardenHome()));
+}
+class GardenHome extends StatefulWidget {
+  const GardenHome({super.key});
+  @override State<GardenHome> createState()=>_GardenHomeState();
+}
+class _GardenHomeState extends State<GardenHome> with WidgetsBindingObserver {
+  final controller=GardenController();
+  final boardKey=GlobalKey<BoardSurfaceState>();
+  int tab=0,seenOutcome=0;bool introQueued=false;
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);controller.addListener(changed);controller.initialize();}
+  void changed(){
+    if(!mounted)return;setState((){});
+    if(controller.ready&&!controller.introSeen&&!introQueued){introQueued=true;WidgetsBinding.instance.addPostFrameCallback((_)async{if(mounted){await story(introLines);await controller.markIntroSeen();}});}
+    if(controller.outcomeSerial>seenOutcome){seenOutcome=controller.outcomeSerial;WidgetsBinding.instance.addPostFrameCallback((_) {if(mounted)outcome();});}
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){if(state==AppLifecycleState.paused||state==AppLifecycleState.inactive){if(controller.sound.enabled)controller.sound.setEnabled(false);}}
+  @override void dispose(){WidgetsBinding.instance.removeObserver(this);controller.removeListener(changed);controller.dispose();super.dispose();}
+  Future<void> story(List<String> lines)=>showDialog<void>(context:context,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:StoryDialog(lines:lines)));
+  void toast(String text)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text,textDirection:TextDirection.rtl),behavior:SnackBarBehavior.floating));
+  Future<void> chest()async{await showDialog<void>(context:context,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:ChestDialog(controller:controller)));}
+  Future<void> task()async{
+    final index=controller.styles.length;if(index>=5)return;
+    if(controller.stars<taskCosts[index]){toast('برای این کار ${fa(taskCosts[index])} ستاره لازم داریم. یک مرحله بازی کن!');setState(()=>tab=0);return;}
+    final style=await showDialog<int>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(taskTitles[index]),content:Column(mainAxisSize:MainAxisSize.min,children:[const Text('ترنج: کدام طرح را برای باغ انتخاب کنیم؟'),const SizedBox(height:18),Wrap(spacing:10,runSpacing:10,alignment:WrapAlignment.center,children:List.generate(3,(i)=>FilledButton.tonal(onPressed:()=>Navigator.pop(ctx,i),child:Column(children:[Icon([Icons.local_florist,Icons.auto_awesome,Icons.spa][i],size:34),Text(taskChoices[index][i])]))))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('بعداً'))])));
+    if(style!=null){await controller.buildTask(style);if(mounted)await story([taskStories[index]]);}
+  }
+  Future<void> outcome()async{
+    final won=controller.outcome==GameStatus.won;if(won)boardKey.currentState?.board.celebrate();
+    final choice=await showDialog<String>(context:context,barrierDismissible:false,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(won?'آفرین! باغ یک قدم زنده‌تر شد':'این بار کمی کم آوردیم'),content:Column(mainAxisSize:MainAxisSize.min,children:[Icon(won?Icons.stars_rounded:Icons.favorite_border,size:68,color:won?gold:const Color(0xffcb6e70)),const SizedBox(height:12),Text(won?'یک ستاره گرفتی!\nامتیاز: ${fa(controller.game.score)}\nهر سه برد، یک صندوقچه تازه.':'جان باقی‌مانده: ${fa(controller.lives)}\nهر ۳۰ دقیقه یک جان برمی‌گردد.',textAlign:TextAlign.center)]),actions:[if(won)TextButton(onPressed:()=>Navigator.pop(ctx,'garden'),child:const Text('بریم باغ')),FilledButton(onPressed:()=>Navigator.pop(ctx,'next'),child:Text(won?'مرحله بعد':'دوباره بازی کن'))])));
+    if(!mounted)return;
+    if(controller.lives>0){controller.start();if(choice=='garden')setState(()=>tab=1);}
+    else{final bought=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('یک نفس تازه'),content:const Text('یک جان با ۱۵۰ سکه بگیر، یا صبر کن تا جان بعدی برگردد.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('صبر می‌کنم')),FilledButton(onPressed:controller.coins>=150?()=>Navigator.pop(ctx,true):null,child:const Text('۱۵۰ سکه'))])));if(bought==true)await controller.buyLife();}
+  }
+  Widget stat(IconData icon,String value,Color color)=>Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),decoration:BoxDecoration(color:Colors.white.withValues(alpha:.13),borderRadius:BorderRadius.circular(20),border:Border.all(color:Colors.white24)),child:Row(mainAxisSize:MainAxisSize.min,children:[Icon(icon,size:17,color:color),const SizedBox(width:5),Text(value,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold,fontSize:12))]));
+  @override Widget build(BuildContext context){
+    if(!controller.ready)return const Scaffold(body:Center(child:CircularProgressIndicator()));
+    return Scaffold(body:SafeArea(child:Column(children:[Container(decoration:const BoxDecoration(color:teal,border:Border(bottom:BorderSide(color:gold,width:2))),padding:const EdgeInsets.fromLTRB(16,12,16,12),child:Wrap(spacing:14,runSpacing:10,alignment:WrapAlignment.spaceBetween,crossAxisAlignment:WrapCrossAlignment.center,children:[const Row(mainAxisSize:MainAxisSize.min,children:[Icon(Icons.spa_outlined,color:gold,size:30),SizedBox(width:10),Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('باغ فیروزه',style:TextStyle(color:cream,fontSize:23,fontWeight:FontWeight.bold)),Text('قـصـه تـرنـج',style:TextStyle(color:gold,fontSize:10,letterSpacing:2))])]),Row(mainAxisSize:MainAxisSize.min,children:[stat(Icons.monetization_on_rounded,fa(controller.coins),gold),const SizedBox(width:5),stat(Icons.star_rounded,fa(controller.stars),gold),const SizedBox(width:5),stat(Icons.favorite_rounded,fa(controller.lives),const Color(0xfff19c9f)),IconButton(tooltip:controller.sound.enabled?'قطع موسیقی و صدا':'روشن کردن موسیقی و صدا',onPressed:()async{await controller.sound.setEnabled(!controller.sound.enabled);if(mounted)setState((){});},icon:Icon(controller.sound.enabled?Icons.volume_up_rounded:Icons.volume_off_rounded,color:cream))])])),Expanded(child:LayoutBuilder(builder:(context,box){final wide=box.maxWidth>=900;return SingleChildScrollView(padding:EdgeInsets.all(wide?24:12),child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:1180),child:wide?Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Expanded(flex:10,child:Column(children:[BoardSurface(key:boardKey,controller:controller),const SizedBox(height:16),treasures()])),const SizedBox(width:24),Expanded(flex:11,child:garden())]):IndexedStack(index:tab,alignment:Alignment.topCenter,children:[BoardSurface(key:boardKey,controller:controller),garden(),treasures()]))));})),NavigationBar(selectedIndex:tab,onDestinationSelected:(i){if(!controller.game.busy)setState(()=>tab=i);},backgroundColor:cream,destinations:const[NavigationDestination(icon:Icon(Icons.grid_view_rounded),label:'جورچین'),NavigationDestination(icon:Icon(Icons.yard_outlined),label:'باغ ایرانی'),NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'گنجینه')])])));
+  }
+  Widget garden()=>Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Container(clipBehavior:Clip.antiAlias,decoration:BoxDecoration(borderRadius:BorderRadius.circular(22),border:Border.all(color:gold,width:2),boxShadow:const[BoxShadow(color:Color(0x22000000),blurRadius:18,offset:Offset(0,8))]),child:AspectRatio(aspectRatio:1.28,child:Stack(fit:StackFit.expand,children:[Image.asset('assets/images/persian_garden.webp',fit:BoxFit.cover),CustomPaint(painter:GardenDecorations(controller.styles)),Positioned(right:14,top:14,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:teal.withValues(alpha:.9),borderRadius:BorderRadius.circular(30)),child:Text('بازسازی باغ   ${fa(controller.styles.length)} / ۵',style:const TextStyle(color:cream,fontSize:12)))),Positioned(left:8,bottom:0,width:120,height:190,child:IgnorePointer(child:Image.asset('assets/images/toranj.webp',fit:BoxFit.contain,alignment:Alignment.bottomCenter)))]))),const SizedBox(height:16),card(child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[const CircleAvatar(backgroundColor:teal,child:Icon(Icons.chat_bubble_outline,color:gold)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('ترنج، همراه باغ',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),Text(controller.styles.isEmpty?'این باغ پر از خاطره است. اولین ستاره را بگیر تا شمعدانی‌های حیاط را بکاریم.':taskStories[controller.styles.length-1],style:const TextStyle(fontSize:12)),TextButton(onPressed:()=>story([controller.styles.isEmpty?introLines[1]:taskStories[controller.styles.length-1]]),child:const Text('گفت‌وگو با ترنج'))]))])),const SizedBox(height:16),card(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('دفترچه باغ',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const SizedBox(height:10),...List.generate(5,(i){final done=i<controller.styles.length,next=i==controller.styles.length;return Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Row(children:[Icon(done?Icons.check_circle_rounded:next?Icons.radio_button_checked:Icons.lock_outline,color:done?teal:next?gold:Colors.grey,size:23),const SizedBox(width:10),Expanded(child:Text(taskTitles[i],style:TextStyle(fontSize:12,color:done||next?ink:Colors.grey))),if(done)Text(taskChoices[i][controller.styles[i]],style:const TextStyle(fontSize:10,color:teal)),if(next)FilledButton(onPressed:task,child:Text('${fa(taskCosts[i])} ★'))]));})])),const SizedBox(height:16),TextButton.icon(onPressed:()=>setState(()=>tab=0),icon:const Icon(Icons.play_arrow_rounded),label:const Text('بازی کن و ستاره بگیر'))]);
+  Widget treasures()=>card(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Row(children:[const Icon(Icons.inventory_2_outlined,color:teal),const SizedBox(width:10),const Expanded(child:Text('گنجینه مادربزرگ',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),Text('${fa(controller.wins%3)} / ۳ برد',style:const TextStyle(fontSize:11))]),const SizedBox(height:12),LinearProgressIndicator(value:controller.wins%3/3,color:gold,backgroundColor:gold.withValues(alpha:.2),borderRadius:BorderRadius.circular(8),minHeight:7),const SizedBox(height:10),const Text('هر سه برد یک صندوقچه؛ داخلش سکه، چکش، جابه‌جایی و رشته آذرخش هست.',style:TextStyle(fontSize:12)),const SizedBox(height:10),Center(child:CustomPaint(size:const Size(180,120),painter:ChestPainter(0))),FilledButton.icon(onPressed:controller.chests>0?chest:null,icon:const Icon(Icons.auto_awesome),label:Text('باز کردن صندوقچه  × ${fa(controller.chests)}')),const SizedBox(height:16),Wrap(spacing:10,runSpacing:10,children:[inventory(Icons.hardware,'چکش',controller.hammers),inventory(Icons.shuffle,'جابه‌جایی',controller.shuffles),inventory(Icons.bolt,'آذرخش',controller.lightning)]),const SizedBox(height:14),const Text('آذرخش: چند مهره هم‌رنگ را لمس کن؛ اتصال برق بین آن‌ها شکل می‌گیرد. سه مهره یا بیشتر را یک‌جا آزاد کن.',style:TextStyle(fontSize:11))]));
+  Widget inventory(IconData icon,String name,int n)=>Chip(avatar:Icon(icon,size:18,color:teal),label:Text('$name ${fa(n)}',style:const TextStyle(fontSize:11)),side:BorderSide(color:gold.withValues(alpha:.5)),backgroundColor:cream);
+}
+Widget card({required Widget child})=>Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:cream,borderRadius:BorderRadius.circular(20),border:Border.all(color:const Color(0xffdfd2b9)),boxShadow:const[BoxShadow(color:Color(0x09000000),blurRadius:12,offset:Offset(0,5))]),child:child);
+
+class BoardSurface extends StatefulWidget {
+  const BoardSurface({super.key,required this.controller});final GardenController controller;
+  @override State<BoardSurface> createState()=>BoardSurfaceState();
+}
+class BoardSurfaceState extends State<BoardSurface> {
+  late final PersianBoard board;
+  bool hammer=false;int count=0;Offset lastDrag=Offset.zero;
+  GardenController get c=>widget.controller;
+  @override void initState(){super.initState();board=PersianBoard(c,onSelectionChanged:(n){if(mounted)setState(()=>count=n);});}
+  @override Widget build(BuildContext context){final g=c.game;return card(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Row(children:[Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:teal,borderRadius:BorderRadius.circular(12)),child:Text('مرحله ${fa(g.level)}',style:const TextStyle(color:cream,fontWeight:FontWeight.bold))),const Spacer(),const Icon(Icons.touch_app_outlined,size:19,color:teal),Text(' ${fa(g.moves)} حرکت',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:17))]),const SizedBox(height:14),Wrap(spacing:14,runSpacing:8,alignment:WrapAlignment.spaceBetween,children:[...g.goals.entries.map((e)=>Row(mainAxisSize:MainAxisSize.min,children:[CustomPaint(size:const Size(30,30),painter:GemPainter(e.key)),const SizedBox(width:5),Text('${fa(math.max(0,e.value-g.collected[e.key]))}',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16))])),if(g.soilTotal>0)Row(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.grass,color:Color(0xff779253)),Text(' ${fa(g.soilTotal-g.soilCleared)}')]),Text('${fa(g.score)} امتیاز',style:const TextStyle(fontSize:11,color:teal))]),const SizedBox(height:12),AspectRatio(aspectRatio:1,child:ClipRRect(borderRadius:BorderRadius.circular(20),child:GestureDetector(behavior:HitTestBehavior.opaque,onTapUp:(d)async{await board.tap(d.localPosition,hammer:hammer);if(hammer&&mounted)setState(()=>hammer=false);},onPanStart:(d){lastDrag=d.localPosition;board.dragStart(lastDrag);},onPanUpdate:(d){lastDrag=d.localPosition;board.dragUpdate(lastDrag);},onPanEnd:(_)async{await board.dragEnd(lastDrag);},child:GameWidget(game:board)))),const SizedBox(height:12),Row(children:[const Icon(Icons.blur_circular,color:teal,size:21),const SizedBox(width:8),Expanded(child:LinearProgressIndicator(value:g.rainbowCharge/6,color:const Color(0xff7e87cb),backgroundColor:const Color(0xffdce7df),minHeight:8,borderRadius:BorderRadius.circular(8))),const SizedBox(width:8),Text('${fa(g.rainbowCharge)} / ۶',style:const TextStyle(fontSize:11))]),const SizedBox(height:6),const Text('با انفجارها گوی رنگین‌کمان را شارژ کن',textAlign:TextAlign.center,style:TextStyle(fontSize:10,color:teal)),const SizedBox(height:12),Wrap(alignment:WrapAlignment.spaceEvenly,spacing:6,runSpacing:8,children:[tool(Icons.hardware,hammer?'انتخاب کن':'چکش',c.hammers,hammer,()=>setState((){hammer=!hammer;if(c.chainMode)c.toggleChain();})),tool(Icons.shuffle,'جابه‌جایی',c.shuffles,false,()=>c.shuffle()),tool(Icons.bolt,'آذرخش',c.lightning,c.chainMode,(){hammer=false;c.toggleChain();}),tool(Icons.lightbulb_outline,'راهنما',null,false,board.hint)]),if(c.chainMode)...[const SizedBox(height:12),Text('مهره‌های هم‌رنگ انتخاب‌شده: ${fa(count)}',textAlign:TextAlign.center,style:const TextStyle(fontSize:12)),FilledButton.icon(onPressed:count>=3&&!g.busy?board.discharge:null,icon:const Icon(Icons.bolt),label:const Text('رها کردن آذرخش'))],if(g.status!=GameStatus.playing)...[const SizedBox(height:12),FilledButton(onPressed:(){c.refillLives();if(c.lives>0)c.start();},child:const Text('شروع دوباره'))],const SizedBox(height:12),Text(hammer?'یک خانه را لمس کن؛ چکش حرکت کم نمی‌کند.':c.chainMode?'سه یا چند مهره هم‌رنگ را لمس کن یا روی آن‌ها بکش.':'دو مهره کنار هم را عوض کن. برای انفجار، دوبار به بمب بزن.',textAlign:TextAlign.center,style:const TextStyle(fontSize:10,color:Color(0xff667674)))]));}
+  Widget tool(IconData icon,String label,int? amount,bool selected,VoidCallback action)=>SizedBox(width:68,child:Column(children:[IconButton.filledTonal(tooltip:label,isSelected:selected,selectedIcon:Icon(icon,color:Colors.white),style:IconButton.styleFrom(backgroundColor:selected?teal:const Color(0xffe7e6cf)),onPressed:c.game.busy||amount==0?null:action,icon:Icon(icon,color:teal)),Text('$label${amount==null?'':' ${fa(amount)}'}',textAlign:TextAlign.center,style:const TextStyle(fontSize:9))]));
 }
 
-class GardenScreen extends StatefulWidget {
-  const GardenScreen({super.key});
-  @override State<GardenScreen> createState()=>_GardenScreenState();
+class StoryDialog extends StatefulWidget {
+  const StoryDialog({super.key,required this.lines});final List<String> lines;
+  @override State<StoryDialog> createState()=>_StoryDialogState();
 }
-class _GardenScreenState extends State<GardenScreen> {
-  GardenGame game=GardenGame(1);
-  int level=1,stars=0,coins=0,selected=-1,tab=0,hammers=3,shuffles=2;
-  final styles=<int>[];
-  bool ready=false,hammerMode=false,rewarded=false;
-  Set<int> clearing={},hinted={};
-  SharedPreferences? prefs;
-  @override void initState(){super.initState(); _load();}
-  Future<void> _load() async {
-    prefs=await SharedPreferences.getInstance();
-    try {
-      final data=jsonDecode(prefs!.getString('dream_garden')??'{}') as Map<String,dynamic>;
-      level=(data['level'] as int? ?? 1).clamp(1,20).toInt();
-      stars=data['stars'] as int? ?? 0;coins=data['coins'] as int? ?? 0;
-      hammers=data['hammers'] as int? ?? 3;shuffles=data['shuffles'] as int? ?? 2;
-      styles.addAll((data['styles'] as List? ?? []).cast<int>().take(5));
-    }catch(_){/* Start fresh if a saved prototype is incompatible. */}
-    if(!mounted)return; _start();setState(()=>ready=true);
-  }
-  Future<void> _save()async{await prefs?.setString('dream_garden',jsonEncode({'level':level,'stars':stars,'coins':coins,'styles':styles,'hammers':hammers,'shuffles':shuffles}));}
-  void _start(){game=GardenGame(level);selected=-1;clearing={};hinted={};rewarded=false;hammerMode=false;
-    game.onFrame=(phase,indices)async{if(!mounted)return;setState(()=>clearing=phase=='clear'?indices:{});if(phase!='idle')await Future<void>.delayed(Duration(milliseconds:phase=='clear'?230:150));};
-  }
-  Future<void> _choose(int i)async{
-    if(game.busy||game.status!=GameStatus.playing)return;
-    setState(()=>hinted={});
-    if(hammerMode){if(hammers<1)return;setState((){hammerMode=false;hammers--;selected=-1;});await game.hammer(i);await _save();}
-    else if(selected==i){setState(()=>selected=-1);if(game.board[i]!.power!=null)await game.activate(i);}
-    else if(selected<0||!game.adjacent(selected,i)){setState(()=>selected=i);return;}
-    else{final from=selected;setState(()=>selected=-1);await game.swap(from,i);}
-    if(!mounted)return;setState((){});await _finish();
-  }
-  Future<void> _finish()async{
-    if(rewarded||game.status==GameStatus.playing)return;rewarded=true;
-    final won=game.status==GameStatus.won;
-    if(won){stars++;coins+=100+game.score~/100;level=min(20,level+1);await _save();}
-    if(!mounted)return;
-    final goGarden=await showDialog<bool>(context:context,barrierDismissible:false,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
-      title:Text(won?'🌟 یک قدم نزدیک‌تر!':'🍃 یک فرصت تازه'),
-      content:Text(won?'یک ستاره گرفتی. وقت بازسازی باغ است.':'حرکت‌ها تمام شد؛ با چیدمانی تازه دوباره امتحان کن.'),
-      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:Text(won?'مرحله بعد':'تلاش دوباره')),if(won)FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('باغ من'))],
-    )));
-    if(!mounted)return;setState((){_start();if(goGarden==true)tab=1;});
-  }
-  Future<void> _buildTask()async{
-    final step=styles.length;if(step>=5)return;
-    if(stars<costs[step]){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('با تمام‌کردن جورچین، ستاره بگیر.')));return;}
-    final choice=await showDialog<int>(context:context,builder:(ctx)=>AlertDialog(title:Text(titles[step]),content:Wrap(spacing:10,children:List.generate(3,(i)=>TextButton(onPressed:()=>Navigator.pop(ctx,i),child:Text(decorations[step][i],style:const TextStyle(fontSize:40)))))));
-    if(choice==null||!mounted)return;setState((){stars-=costs[step];styles.add(choice);});await _save();
-  }
-  Widget _panel(Widget child)=>Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xfffffefa),borderRadius:BorderRadius.circular(24),border:Border.all(color:const Color(0xffe1e7d8))),child:child);
-  Widget _puzzle()=>_panel(Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Row(children: [
-      Expanded(child: Text('مرحله ${fa(game.level)}',
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: ink))),
-      const SizedBox(width: 12),
-      const Flexible(child: Text('✦ جورچین باغ', maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12, color: Colors.grey))),
-    ]),
-    const SizedBox(height:18),Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xfff1f4e9),borderRadius:BorderRadius.circular(16)),child:Row(children:[
-      Column(children:[Text(fa(game.moves),style:const TextStyle(fontSize:30,color:ink)),const Text('حرکت باقی‌مانده',style:TextStyle(fontSize:10))]),const SizedBox(width:25),
-      Expanded(child:Wrap(spacing:16,runSpacing:8,children:[...game.goals.entries.map((g)=>Text('${symbols[g.key]} ${fa(max(0,g.value-game.collected[g.key]))}',style:const TextStyle(fontSize:21))),if(game.soilTotal>0)Text('🌱 ${fa(max(0,game.soilTotal-game.soilCleared))}',style:const TextStyle(fontSize:21))])),
-    ])),const SizedBox(height:16),
-    Container(padding:const EdgeInsets.all(7),decoration:BoxDecoration(color:const Color(0xffe7ecdb),borderRadius:BorderRadius.circular(15)),child:Directionality(textDirection:TextDirection.ltr,child:GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:49,gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:7,crossAxisSpacing:4,mainAxisSpacing:4),itemBuilder:(ctx,i){final cell=game.board[i]!;return Semantics(label:'${symbols[cell.color]}، ردیف ${i~/7+1}، ستون ${i%7+1}',button:true,child:GestureDetector(onTap:()=>_choose(i),child:AnimatedOpacity(duration:const Duration(milliseconds:180),opacity:clearing.contains(i)?0:1,child:AnimatedContainer(duration:const Duration(milliseconds:150),decoration:BoxDecoration(color:selected==i?const Color(0xffffe4a2):game.soil[i]>1?const Color(0xffd6bf97):game.soil[i]>0?const Color(0xffcad7ad):const Color(0xfffafbf2),borderRadius:BorderRadius.circular(9),border:Border.all(color:hinted.contains(i)?Colors.amber:selected==i?const Color(0xffdbad46):Colors.white,width:hinted.contains(i)?3:1)),child:Stack(alignment:Alignment.center,children:[Padding(padding:const EdgeInsets.all(5),child:FittedBox(child:Text(symbols[cell.color],style:const TextStyle(fontSize:35)))),if(cell.power!=null)Positioned(bottom:0,right:0,child:Text(cell.power==Power.bomb?'💣':'🌈',style:const TextStyle(fontSize:17)))])))));}))),
-    const SizedBox(height:10),Text(hammerMode?'یک مهره را برای حذف لمس کن':'امتیاز ${fa(game.score)}  ·  دو مهره کنار هم را جابه‌جا کن',style:const TextStyle(fontSize:10,color:Colors.grey)),const SizedBox(height:14),
-    Wrap(alignment:WrapAlignment.spaceBetween,spacing:5,children:[TextButton(onPressed:(){if(game.busy)return;setState(()=>hinted=(game.hint()??[]).toSet());},child:const Text('💡 راهنما')),TextButton(onPressed:(){if(!game.busy&&hammers>0)setState(()=>hammerMode=!hammerMode);},child:Text('🔨 ${fa(hammers)} بیلچه')),TextButton(onPressed:()async{if(game.busy||shuffles<1||game.status!=GameStatus.playing)return;setState((){game.shuffle();shuffles--;});await _save();},child:Text('↝ ${fa(shuffles)} ترکیب'))]),
-  ]));
-  Widget _garden()=>_panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    ClipRRect(borderRadius:BorderRadius.circular(18),child:AspectRatio(aspectRatio:1.15,child:Stack(fit:StackFit.expand,children:[Image.asset('assets/garden.webp',fit:BoxFit.cover),Positioned(bottom:0,left:0,right:0,child:Container(height:100,decoration:const BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent,Color(0xb0183524)])))),for(var i=0;i<styles.length;i++)Positioned(left:45.0+(i%3)*65,top:115.0+(i~/3)*70,child:Text(decorations[i][styles[i]],style:const TextStyle(fontSize:42))),const Positioned(bottom:22,right:20,child:Text('دوباره، زندگی',style:TextStyle(fontSize:28,color:Colors.white,fontWeight:FontWeight.bold)))]))),
-    const SizedBox(height:20),Text('${fa(styles.length)} از ۵ بازسازی',style:const TextStyle(color:Colors.grey)),const SizedBox(height:10),LinearProgressIndicator(value:styles.length/5,color:ink,backgroundColor:const Color(0xffe5ebd9)),const SizedBox(height:22),
-    Text(styles.length<5?titles[styles.length]:'باغ دوباره جان گرفت! 🌿',style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold,color:ink)),const SizedBox(height:14),
-    FilledButton(onPressed:styles.length<5?_buildTask:()=>setState(()=>tab=0),child:Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(styles.length<5?'انتخاب دکور و بازسازی · ${fa(costs[styles.length])} ★':'ادامه جورچین‌ها'))),
-    const SizedBox(height:10),const Text('هر ستاره، شروع یک تغییر کوچک است.',textAlign:TextAlign.center,style:TextStyle(fontSize:11,color:Colors.grey)),
-  ]));
-  @override
-  Widget build(BuildContext context) {
-    if (!ready) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+class _StoryDialogState extends State<StoryDialog> {
+  int line=0,letters=0;Timer? timer;
+  @override void initState(){super.initState();type();}
+  void type(){timer?.cancel();letters=0;timer=Timer.periodic(const Duration(milliseconds:20),(t){if(!mounted){t.cancel();return;}setState(()=>letters=math.min(letters+2,widget.lines[line].length));if(letters>=widget.lines[line].length)t.cancel();});}
+  @override void dispose(){timer?.cancel();super.dispose();}
+  void next(){if(letters<widget.lines[line].length){timer?.cancel();setState(()=>letters=widget.lines[line].length);}else if(line<widget.lines.length-1){setState(()=>line++);type();}else{Navigator.pop(context);}}
+  @override Widget build(BuildContext context)=>Dialog(backgroundColor:cream,clipBehavior:Clip.antiAlias,child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:480),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Container(height:210,color:teal,child:Stack(fit:StackFit.expand,children:[Opacity(opacity:.25,child:Image.asset('assets/images/persian_garden.webp',fit:BoxFit.cover)),Image.asset('assets/images/toranj.webp',alignment:Alignment.topCenter,fit:BoxFit.contain),const Positioned(right:18,bottom:15,child:Text('ترنج',style:TextStyle(color:cream,fontSize:25,fontWeight:FontWeight.bold)))])),Padding(padding:const EdgeInsets.all(24),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[ConstrainedBox(constraints:const BoxConstraints(minHeight:140),child:Text(widget.lines[line].substring(0,letters),style:const TextStyle(height:1.9,fontSize:14))),Text('${fa(line+1)} / ${fa(widget.lines.length)}',style:const TextStyle(fontSize:11,color:teal)),const SizedBox(height:10),FilledButton(onPressed:next,child:Text(letters<widget.lines[line].length?'نمایش کامل':line==widget.lines.length-1?'بزن بریم!':'ادامه قصه'))]))]))));
+}
+class ChestDialog extends StatefulWidget {
+  const ChestDialog({super.key,required this.controller});final GardenController controller;
+  @override State<ChestDialog> createState()=>_ChestDialogState();
+}
+class _ChestDialogState extends State<ChestDialog> with SingleTickerProviderStateMixin {
+  late final animation=AnimationController(vsync:this,duration:const Duration(milliseconds:1000));bool opened=false;
+  @override void dispose(){animation.dispose();super.dispose();}
+  @override Widget build(BuildContext context)=>AlertDialog(title:Text(opened?'گنج به دستت رسید!':'صندوقچه باغ فیروزه'),content:SizedBox(width:300,child:Column(mainAxisSize:MainAxisSize.min,children:[AnimatedBuilder(animation:animation,builder:(_,__)=>CustomPaint(size:const Size(240,170),painter:ChestPainter(animation.value))),const SizedBox(height:12),Text(opened?'۱۵۰ سکه + یک چکش\nیک جابه‌جایی + یک آذرخش\nیک جان تا سقف پنج جان':'یک هدیه برای ادامه قصه باغ',textAlign:TextAlign.center)])),actions:[FilledButton(onPressed:()async{if(opened){Navigator.pop(context);return;}setState(()=>opened=true);final reward=await widget.controller.openChest();if(!mounted)return;if(reward==null){Navigator.pop(context);return;}animation.forward();},child:Text(opened?'چه عالی!':'باز کن'))]);
+}
+class ChestPainter extends CustomPainter {
+  ChestPainter(this.open);final double open;
+  @override void paint(Canvas c,Size s){c.save();c.translate(s.width/2,s.height*.65);final k=s.width/220;c.scale(k);
+    if(open>0){for(var i=0;i<12;i++){final a=i*math.pi/6;final path=Path()..moveTo(0,0)..lineTo(math.cos(a-.12)*100*open,math.sin(a-.12)*100*open)..lineTo(math.cos(a+.12)*100*open,math.sin(a+.12)*100*open)..close();c.drawPath(path,Paint()..color=gold.withValues(alpha:.25*open));}}
+    c.drawOval(const Rect.fromLTWH(-80,25,160,20),Paint()..color=Colors.black12..maskFilter=const MaskFilter.blur(BlurStyle.normal,6));
+    c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-70,-20,140,65),const Radius.circular(10)),Paint()..color=const Color(0xff94582e));c.drawRect(const Rect.fromLTWH(-59,-20,16,65),Paint()..color=gold);c.drawRect(const Rect.fromLTWH(43,-20,16,65),Paint()..color=gold);
+    c.save();c.translate(0,-open*53);c.rotate(-open*.12);c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-75,-60,150,50),const Radius.circular(18)),Paint()..color=teal);c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-75,-60,150,50),const Radius.circular(18)),Paint()..color=gold..style=PaintingStyle.stroke..strokeWidth=6);c.restore();
+    c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(-12,-23-open*10,24,29),const Radius.circular(5)),Paint()..color=gold);c.drawCircle(Offset(0,-9-open*10),4,Paint()..color=teal);
+    if(open>0){for(var i=0;i<6;i++){final a=i*math.pi/3;final p=Offset(math.cos(a)*80*open,-35+math.sin(a)*65*open);paintGem(c,p,22,3);}}c.restore();}
+  @override bool shouldRepaint(covariant ChestPainter old)=>old.open!=open;
+}
+class GardenDecorations extends CustomPainter {
+  GardenDecorations(this.styles);final List<int> styles;
+  @override void paint(Canvas c,Size s){
+    final palettes=[const Color(0xffdf6e87),const Color(0xffe1b74d),const Color(0xff815cbd)];
+    for(var task=0;task<styles.length;task++){
+      final color=palettes[styles[task]];
+      if(task==0||task==3){for(var i=0;i<7;i++){final p=Offset(s.width*(task==0 ? 0.12 : 0.62)+i*s.width*.035,s.height*(task==0 ? 0.77 : 0.84)+math.sin(i)*6);c.drawLine(p,p+const Offset(0,17),Paint()..color=const Color(0xff487845)..strokeWidth=3);for(var j=0;j<5;j++){final a=j*math.pi*2/5;c.drawCircle(p+Offset(math.cos(a)*4,math.sin(a)*4),4,Paint()..color=color);}c.drawCircle(p,2.5,Paint()..color=gold);}}
+      if(task==1){final p=Offset(s.width*.42,s.height*.78);c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center:p,width:70,height:12),const Radius.circular(4)),Paint()..color=styles[task]==2?teal:const Color(0xff895838));c.drawLine(p+const Offset(-25,3),p+const Offset(-28,25),Paint()..color=ink..strokeWidth=5);c.drawLine(p+const Offset(25,3),p+const Offset(28,25),Paint()..color=ink..strokeWidth=5);}
+      if(task==2){final p=Offset(s.width*.5,s.height*.5);c.drawOval(Rect.fromCenter(center:p,width:90,height:27),Paint()..color=const Color(0xff72e3e6).withValues(alpha:.55));for(var i=0;i<5;i++){c.drawArc(Rect.fromCenter(center:p+Offset((i-2)*10,0),width:30,height:65),math.pi,math.pi,false,Paint()..color=Colors.white.withValues(alpha:.8)..style=PaintingStyle.stroke..strokeWidth=2);}}
+      if(task==4){for(var i=0;i<5;i++){final p=Offset(s.width*(.15+i*.17),s.height*(.22+math.sin(i)*.03));c.drawLine(p+const Offset(0,-10),p,Paint()..color=ink..strokeWidth=1);c.drawCircle(p,16,Paint()..color=gold.withValues(alpha:.6)..maskFilter=const MaskFilter.blur(BlurStyle.normal,12));c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center:p,width:11,height:18),const Radius.circular(3)),Paint()..color=styles[task]==1?teal:gold);}}
     }
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: cream,
-        title: const Text('❧ باغ رویا',
-            style: TextStyle(color: ink, fontWeight: FontWeight.bold)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Center(
-              child: Text('★ ${fa(stars)}   ● ${fa(coins)}',
-                  style: const TextStyle(
-                      color: ink, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth > 850;
-          final content = wide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _puzzle()),
-                    const SizedBox(width: 22),
-                    Expanded(child: _garden()),
-                  ],
-                )
-              : Column(
-                  children: [
-                    SegmentedButton<int>(
-                      segments: const [
-                        ButtonSegment(value: 0, label: Text('✦ جورچین')),
-                        ButtonSegment(value: 1, label: Text('❧ باغ من')),
-                      ],
-                      selected: {tab},
-                      onSelectionChanged: (selection) =>
-                          setState(() => tab = selection.first),
-                    ),
-                    const SizedBox(height: 18),
-                    tab == 0 ? _puzzle() : _garden(),
-                  ],
-                );
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1150),
-                child: content,
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
+  @override bool shouldRepaint(covariant GardenDecorations old)=>true;
 }
