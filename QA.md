@@ -1,18 +1,7 @@
-# Verification
+# Validation
 
-## Executed
+CI runs Flutter analysis, native engine/controller/widget tests, legacy browser rule tests, and builds Android debug APK plus Flutter Web.
 
-- Node: 8 passing engine tests, including stable playable boards across all 20 levels, invalid-swap rollback, valid-move resolution, row boundaries, terrain removal, bomb activation, randomized play and victory on the final move.
-- JavaScript syntax check for the browser app.
-- Desktop browser: played a complete first level through visible controls, received one star and coins.
-- Garden: spent the star, selected the second decoration option, confirmed the next task and 1/5 progress.
-- Reload: confirmed garden progress, remaining stars and unlocked level persisted.
-- 390px iframe viewport: confirmed responsive puzzle layout and working Garden/Puzzle tabs.
+Native coverage: all 20 levels start stable; swaps and rollback; soil; distant lightning selections; bomb area and rainbow charging; rainbow target color; cascades across 20 deterministic seeds; inventory persistence, chest one-time claim, restoration budget, life regeneration; 390px phone and desktop layouts.
 
-## Limits
-
-- Native Flutter starter has not been analyzed, compiled or run. Flutter SDK/platform tooling was unavailable. Included native tests are pending execution.
-- No real Android/iOS device performance test.
-- No exhaustive balance testing of all levels or all decoration options.
-- No automated assertion of audio output; audio is off by default and user enabled.
-- Only completed progress/rewards persist; an unfinished board restarts on reload.
+Manual review targets: first-run Toranj dialogue, sound toggle, adjacent swaps and hints, lightning selection and discharge, treasure opening, restoration choices, reload persistence. Physical Android hardware and store release signing remain separate from CI builds.
