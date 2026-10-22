@@ -11,7 +11,7 @@ const gemColors=[Color(0xffd7475c),Color(0xff31b7c7),Color(0xff68a54b),Color(0xf
 void paintGem(Canvas c,Offset at,double diameter,int type,{Power? power,double opacity=1}) {
   c.save();c.translate(at.dx,at.dy);c.scale(diameter/64);
   if(opacity<1)c.saveLayer(const Rect.fromLTWH(-40,-40,80,80),Paint()..color=Colors.white.withValues(alpha:opacity));
-  final color=gemColors[type];final body=Paint()..shader=ui.Gradient.linear(const Offset(-22,-25),const Offset(20,25),[Color.lerp(color,Colors.white,.34)!,color,Color.lerp(color,Colors.black,.18)!]);
+  final color=gemColors[type];final body=Paint()..shader=ui.Gradient.linear(const Offset(-22,-25),const Offset(20,25),[Color.lerp(color,Colors.white,.34)!,color,Color.lerp(color,Colors.black,.18)!],[0,.45,1]);
   c.drawOval(const Rect.fromLTWH(-19,22,38,8),Paint()..color=Colors.black.withValues(alpha:.12)..maskFilter=const MaskFilter.blur(BlurStyle.normal,3));
   final path=Path();
   switch(type){
@@ -35,7 +35,7 @@ void paintGem(Canvas c,Offset at,double diameter,int type,{Power? power,double o
   if(power!=null){
     c.save();c.translate(15,16);c.drawCircle(Offset.zero,15,Paint()..color=const Color(0xff193d48));
     c.drawCircle(Offset.zero,14,Paint()..color=const Color(0xffffd674)..style=PaintingStyle.stroke..strokeWidth=2);
-    if(power==Power.rainbow){c.drawCircle(Offset.zero,10,Paint()..shader=ui.Gradient.sweep(Offset.zero,[Colors.red,Colors.amber,Colors.green,Colors.cyan,Colors.purple,Colors.red]));c.drawCircle(const Offset(-3,-3),3,Paint()..color=Colors.white.withValues(alpha:.8));}
+    if(power==Power.rainbow){c.drawCircle(Offset.zero,10,Paint()..shader=ui.Gradient.sweep(Offset.zero,[Colors.red,Colors.amber,Colors.green,Colors.cyan,Colors.purple,Colors.red],[0,.2,.4,.6,.8,1]));c.drawCircle(const Offset(-3,-3),3,Paint()..color=Colors.white.withValues(alpha:.8));}
     else if(power==Power.bomb){c.drawCircle(const Offset(-1,2),9,Paint()..color=const Color(0xff344653));c.drawPath(Path()..moveTo(1,-6)..quadraticBezierTo(0,-13,8,-10),Paint()..color=const Color(0xffffce6c)..style=PaintingStyle.stroke..strokeWidth=2);c.drawCircle(const Offset(9,-11),3,Paint()..color=Colors.orangeAccent);}
     else {for(var i=0;i<(power==Power.dynamite?3:1);i++){c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(-8+i*6,-9,5,19),const Radius.circular(2)),Paint()..color=const Color(0xffe7744b));}c.drawCircle(const Offset(2,-11),3,Paint()..color=Colors.yellow);}
     c.restore();
@@ -67,7 +67,7 @@ class PersianBoard extends FlameGame {
   @override void onRemove(){if(controller.frameSink==_sink)controller.frameSink=null;super.onRemove();}
   @override void update(double dt){
     super.update(dt);clock+=dt;phaseAge+=dt;shake=math.max(0,shake-dt*15);
-    if(_lastGame!=model){_lastGame=model;selected=-1;selectedChain.clear();hints={};clearing={};phase='idle';}
+    if(_lastGame!=model){_lastGame=model;selected=-1;selectedChain.clear();hints={};clearing={};phase='idle';onSelectionChanged(0);}
     if(!controller.chainMode && selectedChain.isNotEmpty){selectedChain.clear();onSelectionChanged(0);}
   }
   Future<void> animatePhase(String next,Set<int> indices)async{
