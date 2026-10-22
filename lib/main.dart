@@ -94,8 +94,65 @@ class _GardenScreenState extends State<GardenScreen> {
     FilledButton(onPressed:styles.length<5?_buildTask:()=>setState(()=>tab=0),child:Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(styles.length<5?'انتخاب دکور و بازسازی · ${fa(costs[styles.length])} ★':'ادامه جورچین‌ها'))),
     const SizedBox(height:10),const Text('هر ستاره، شروع یک تغییر کوچک است.',textAlign:TextAlign.center,style:TextStyle(fontSize:11,color:Colors.grey)),
   ]));
-  @override Widget build(BuildContext context){
-    if(!ready)return const Scaffold(body:Center(child:CircularProgressIndicator()));
-    return Scaffold(appBar:AppBar(backgroundColor:cream,title:const Text('❧ باغ رویا',style:TextStyle(color:ink,fontWeight:FontWeight.bold)),actions:[Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:Center(child:Text('★ ${fa(stars)}   ● ${fa(coins)}',style:const TextStyle(color:ink,fontWeight:FontWeight.bold))))]),body:LayoutBuilder(builder:(ctx,c)=>SingleChildScrollView(padding:const EdgeInsets.all(16),child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:1150),child:c.maxWidth>850?Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Expanded(child:_puzzle()),const SizedBox(width:22),Expanded(child:_garden())]):Column(children:[SegmentedButton<int>(segments:const[ButtonSegment(value:0,label:Text('✦ جورچین')),ButtonSegment(value:1,label:Text('❧ باغ من'))],selected:{tab},onSelectionChanged:(s)=>setState(()=>tab=s.first)),const SizedBox(height:18),tab==0?_puzzle():_garden()])))));
+  @override
+  Widget build(BuildContext context) {
+    if (!ready) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: cream,
+        title: const Text('❧ باغ رویا',
+            style: TextStyle(color: ink, fontWeight: FontWeight.bold)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Center(
+              child: Text('★ ${fa(stars)}   ● ${fa(coins)}',
+                  style: const TextStyle(
+                      color: ink, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth > 850;
+          final content = wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _puzzle()),
+                    const SizedBox(width: 22),
+                    Expanded(child: _garden()),
+                  ],
+                )
+              : Column(
+                  children: [
+                    SegmentedButton<int>(
+                      segments: const [
+                        ButtonSegment(value: 0, label: Text('✦ جورچین')),
+                        ButtonSegment(value: 1, label: Text('❧ باغ من')),
+                      ],
+                      selected: {tab},
+                      onSelectionChanged: (selection) =>
+                          setState(() => tab = selection.first),
+                    ),
+                    const SizedBox(height: 18),
+                    tab == 0 ? _puzzle() : _garden(),
+                  ],
+                );
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1150),
+                child: content,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

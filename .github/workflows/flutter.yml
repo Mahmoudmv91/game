@@ -3,7 +3,7 @@ name: Test and build Dream Garden
 on:
   pull_request:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -43,6 +43,7 @@ jobs:
         working-directory: ${{ runner.temp }}/dream-garden-build
         run: |
           flutter pub get
+          dart format lib test
           flutter analyze
           flutter test
       - name: Build installable test APK
