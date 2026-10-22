@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dream_garden/main.dart';
 import 'package:flame/game.dart';
+import 'package:dream_garden/persian_board.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,7 +14,7 @@ void main(){
   }
   testWidgets('phone shows real Flame board and garden without overflow',(tester)async{
     await open(tester,const Size(390,844));
-    expect(find.text('مرحله ۱'),findsOneWidget);expect(find.byType(GameWidget),findsOneWidget);expect(tester.takeException(),isNull);
+    expect(find.text('مرحله ۱'),findsOneWidget);expect(find.byType(GameWidget<PersianBoard>),findsOneWidget);expect(tester.takeException(),isNull);
     await tester.tap(find.text('باغ ایرانی'));await tester.pump(const Duration(milliseconds:400));
     expect(find.text('دفترچه باغ'),findsOneWidget);expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox());await tester.pump();
